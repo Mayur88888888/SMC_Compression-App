@@ -387,7 +387,7 @@ fun ParameterInputsSection(viewModel: SmcCalculationViewModel) {
     Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
     Text(
-        text = "SMC Charge & Flow Parameters",
+        text = "SMC Charge & Flow Parameters By Mayur S",
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Bold
@@ -448,7 +448,7 @@ fun ParameterInputsSection(viewModel: SmcCalculationViewModel) {
     Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
     Text(
-        text = "Press Force & Cure Settings",
+        text = "Press Force & Cure Settings By Mayur S",
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Bold
@@ -523,7 +523,7 @@ fun CalculationResultsSection(viewModel: SmcCalculationViewModel) {
         }
     } else {
         Text(
-            text = "Calculation Output Summary",
+            text = "Calculation Output Summary By Mayur S",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold
@@ -1067,6 +1067,14 @@ fun HistoryTabContent(
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Mayur - SMC Compression Molding",
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        style = MaterialTheme.typography.titleLarge
+                                        )                                                                      
+                                                                        
                                     Text(
                                         text = calc.title,
                                         style = MaterialTheme.typography.titleMedium,

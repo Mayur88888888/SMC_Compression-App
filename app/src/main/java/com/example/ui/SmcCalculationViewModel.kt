@@ -59,7 +59,7 @@ class SmcCalculationViewModel(
     val presets = listOf(
         Preset("Standard SMC", "1.85", "60", "3.0", "10.0", "40", "30", "General purpose components, balanced flow properties"),
         Preset("Structural Carbon SMC", "1.45", "50", "2.5", "15.0", "50", "45", "High strength parts, short fibers, higher press force required"),
-        Preset("Class A Surface SMC", "1.95", "70", "4.0", "8.0", "45", "30", "Automotive exterior Class-A finish, low shrinkage, low profile additives")
+        Preset("Class A Surface SMC by Mayur S", "1.95", "70", "4.0", "8.0", "45", "30", "Automotive exterior Class-A finish, low shrinkage, low profile additives")
     )
 
     fun loadPreset(preset: Preset) {
