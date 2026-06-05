@@ -118,11 +118,12 @@ fun SmcCalculatorScreen(
                 .padding(innerPadding)
         ) {
             // Tab Selectors
-            TabRow(
+            ScrollableTabRow(
                 selectedTabIndex = activeTab,
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                edgePadding = 8.dp
             ) {
                 Tab(
                     selected = activeTab == 0,
@@ -141,7 +142,7 @@ fun SmcCalculatorScreen(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Icon(Icons.Default.Info, null, modifier = Modifier.size(16.dp))
-                            Text("SMC Presets", maxLines = 1)
+                            Text("Presets", maxLines = 1)
                         }
                     },
                     modifier = Modifier.testTag("tab_presets")
@@ -151,22 +152,33 @@ fun SmcCalculatorScreen(
                     onClick = { activeTab = 2 },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Default.List, null, modifier = Modifier.size(16.dp))
-                            Text("History (${calculationsList.size})", maxLines = 1)
+                            Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
+                            Text("Flow Simulator", maxLines = 1)
                         }
                     },
-                    modifier = Modifier.testTag("tab_history")
+                    modifier = Modifier.testTag("tab_simulator")
                 )
                 Tab(
                     selected = activeTab == 3,
                     onClick = { activeTab = 3 },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
-                            Text("Flow Simulator", maxLines = 1)
+                            Icon(Icons.Default.Star, null, modifier = Modifier.size(16.dp))
+                            Text("Diagnostics Suite", maxLines = 1)
                         }
                     },
-                    modifier = Modifier.testTag("tab_simulator")
+                    modifier = Modifier.testTag("tab_diagnostics")
+                )
+                Tab(
+                    selected = activeTab == 4,
+                    onClick = { activeTab = 4 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.List, null, modifier = Modifier.size(16.dp))
+                            Text("History (${calculationsList.size})", maxLines = 1)
+                        }
+                    },
+                    modifier = Modifier.testTag("tab_history")
                 )
             }
 
@@ -193,6 +205,17 @@ fun SmcCalculatorScreen(
                         )
                     }
                     2 -> {
+                        FlowSimulatorTabContent(
+                            isTablet = isTablet
+                        )
+                    }
+                    3 -> {
+                        DiagnosticsSuiteTabContent(
+                            viewModel = viewModel,
+                            isTablet = isTablet
+                        )
+                    }
+                    4 -> {
                         HistoryTabContent(
                             calculationsList = calculationsList,
                             onLoad = { calc ->
@@ -201,11 +224,6 @@ fun SmcCalculatorScreen(
                             },
                             onDelete = { id -> viewModel.deleteById(id) },
                             onDeleteAll = { viewModel.deleteAll() }
-                        )
-                    }
-                    3 -> {
-                        FlowSimulatorTabContent(
-                            isTablet = isTablet
                         )
                     }
                 }
@@ -1980,3 +1998,1176 @@ fun FlowVisualizerCanvas(
         }
     }
 }
+
+@Composable
+fun DiagnosticsSuiteTabContent(viewModel: SmcCalculationViewModel, isTablet: Boolean) {
+    var subTabState by remember { mutableStateOf(0) } // 0: Thermal, 1: Cost, 2: Press, 3: Troubleshooter
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // High-fidelity local sub-selector chips with premium styling
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(0.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    SubTabItem("Mayur - Thermal Advisor", Icons.Default.Settings, 0),
+                    SubTabItem("Mayur - Cost & Waste Calculator", Icons.Default.Done, 1),
+                    SubTabItem("Mayur - Press Cap Matcher", Icons.Default.Build, 2),
+                    SubTabItem("Mayur - Troubleshooter", Icons.Default.Warning, 3)
+                ).forEach { item ->
+                    FilterChip(
+                        selected = subTabState == item.idx,
+                        onClick = { subTabState = item.idx },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(item.icon, null, modifier = Modifier.size(14.dp))
+                                Text(item.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = subTabState,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) { activeSubState ->
+            when (activeSubState) {
+                0 -> ThermalAdvisorView(viewModel = viewModel, isTablet = isTablet)
+                1 -> CostEstimatorView(viewModel = viewModel, isTablet = isTablet)
+                2 -> PressMatcherView(viewModel = viewModel, isTablet = isTablet)
+                3 -> TroubleshooterView(isTablet = isTablet)
+            }
+        }
+    }
+}
+
+private data class SubTabItem(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val idx: Int)
+
+@Composable
+fun ThermalAdvisorView(viewModel: SmcCalculationViewModel, isTablet: Boolean) {
+    var heatingSource by remember { mutableStateOf("Thermal Oil") } // Thermal Oil, Electric Rods, Steam
+    var topMoldTemp by remember { mutableStateOf(152f) } // °C
+    var botMoldTemp by remember { mutableStateOf(147f) } // °C
+
+    val output = viewModel.calculationResult
+    val partThickness = viewModel.thicknessMm.toDoubleOrNull() ?: 4.0
+    val chargeWeight = output?.chargeWeightG ?: 1250.0
+    val cureTime = output?.estimatedCuringTimeSec ?: 150.0
+
+    // Energy calculation: Q = m * cp * dT
+    // cp of molding compound is ~1.25 J/gK
+    // assume room temperature of 25°C
+    val cp = 1.25
+    val dT = max(0f, topMoldTemp - 25f)
+    val thermalEnergyKJ = (chargeWeight * cp * dT) / 1000.0 // kJ
+    val avgHeatPowerKW = if (cureTime > 0) thermalEnergyKJ / cureTime else 0.0
+
+    val tempDiff = topMoldTemp - botMoldTemp
+    val feedbackStatus = remember(tempDiff) {
+        when {
+            tempDiff in 3f..6f -> ThermalStatus(
+                title = "Optimal Thermal Profile",
+                desc = "Excellent! Top plate (cavity) is 3°C to 6°C hotter than bottom plate (core). This ensures the top mold surface cures with superior cosmetics first, and locks the finished part to the core side upon press opening for faultless automated ejection.",
+                color = Color(0xFF4CAF50),
+                icon = Icons.Default.CheckCircle
+            )
+            tempDiff == 0f -> ThermalStatus(
+                title = "Neutral Thermal Profile",
+                desc = "Top and bottom molds are identically heated. This might trigger unpredictable part release behavior, where the part sticks to the upper cavity upon opening. High cosmic vacuum bonding could scrap cosmetics.",
+                color = Color(0xFFFF9800),
+                icon = Icons.Default.Warning
+            )
+            tempDiff < 0f -> ThermalStatus(
+                title = "Inverted Profile (High Core Sticking Risk)",
+                desc = "Warning: Bottom mold is hotter than Top mold. The cooling sequence will contract onto the cavity surface first, forcing the part to adhere to the upper punch. Severe risk of automated gripper damage on the vacuum tool.",
+                color = Color(0xFFFF5252),
+                icon = Icons.Default.Warning
+            )
+            tempDiff > 12f -> ThermalStatus(
+                title = "High Thermal Gradient (Extreme Warpage Prediction)",
+                desc = "Critical failure warning. Temperature delta exceeds 12°C. The lopsided cure kinetic triggers differential molecular shrinkage between top and bottom fiber skins, yielding extreme physical part warping/bowing upon pressure release.",
+                color = Color(0xFFFF5252),
+                icon = Icons.Default.Warning
+            )
+            else -> ThermalStatus(
+                title = "Moderate Gradient Warning",
+                desc = "The temperature delta is wider than standard recommendations (1.5°C ~ 6.0°C). Minor post-mold warping (curving) is probable. Cooling fixture sizing might be necessary to restrain structural flatness.",
+                color = Color(0xFFFFB74D),
+                icon = Icons.Default.Warning
+            )
+        }
+    }
+
+    val content = @Composable {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header
+            Column {
+                Text(
+                    text = "Mayur - Thermal Differential & Heat Balance Advisor",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Mayur - Analyze temperature mismatch between cavity and core sides to avoid cosmic warpage & predict energy ingestion.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Main Gradient Simulation Canvas Area
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161618)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha=0.3f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val w = size.width
+                        val h = size.height
+
+                        // Draw Grid lines
+                        for (i in 0..(w / 50f).toInt()) {
+                            drawLine(Color.White.copy(alpha = 0.03f), Offset(i * 50f, 0f), Offset(i * 50f, h), 1f)
+                        }
+
+                        // Top Cavity Tool Plate Block
+                        // Color ranges from Yellowish (135C) to Dark Red (170C)
+                        val topPercent = ((topMoldTemp - 135) / (175 - 135)).coerceIn(0f, 1f)
+                        val topColor = Color(
+                            red = 0.9f,
+                            green = (0.6f - topPercent * 0.4f).coerceIn(0f, 1f),
+                            blue = (0.2f - topPercent * 0.15f).coerceIn(0f, 1f)
+                        )
+                        drawRect(
+                            color = topColor,
+                            topLeft = Offset(w * 0.15f, h * 0.12f),
+                            size = Size(w * 0.7f, h * 0.25f)
+                        )
+                        // Top Temperature text label overlay
+                        // Canvas lacks direct text support without NativeCanvas. We draw visually rich helper lines
+                        
+                        // Bottom Core Tool Plate Block
+                        val botPercent = ((botMoldTemp - 135) / (175 - 135)).coerceIn(0f, 1f)
+                        val botColor = Color(
+                            red = 0.9f,
+                            green = (0.6f - botPercent * 0.4f).coerceIn(0f, 1f),
+                            blue = (0.2f - botPercent * 0.15f).coerceIn(0f, 1f)
+                        )
+                        drawRect(
+                            color = botColor,
+                            topLeft = Offset(w * 0.15f, h * 0.63f),
+                            size = Size(w * 0.7f, h * 0.25f)
+                        )
+
+                        // SMC Part inside Cavity
+                        val smcColor = Color(0xFFE0E0E0)
+                        val curedPercent = 0.5f
+                        val blendColor = Color(0xFFFF9800).copy(alpha = 0.8f)
+                        val r = smcColor.red + (blendColor.red - smcColor.red) * curedPercent
+                        val g = smcColor.green + (blendColor.green - smcColor.green) * curedPercent
+                        val b = smcColor.blue + (blendColor.blue - smcColor.blue) * curedPercent
+                        val a = smcColor.alpha + (blendColor.alpha - smcColor.alpha) * curedPercent
+                        drawRoundRect(
+                            color = Color(r, g, b, a),
+                            topLeft = Offset(w * 0.22f, h * 0.44f),
+                            size = Size(width = w * 0.56f, height = h * 0.12f),
+                            cornerRadius = CornerRadius(4f, 4f)
+                        )
+
+                        // Heat flow vectors/waves
+                        val timeMod = (System.currentTimeMillis() % 1600) / 1600f
+                        val waveY1 = h * 0.37f + (h * 0.08f * timeMod)
+                        drawLine(
+                            color = Color.White.copy(alpha = (1f - timeMod) * 0.5f),
+                            start = Offset(w * 0.3f, waveY1),
+                            end = Offset(w * 0.7f, waveY1),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 10f))
+                        )
+
+                        val waveY2 = h * 0.63f - (h * 0.08f * timeMod)
+                        drawLine(
+                            color = Color.White.copy(alpha = (1f - timeMod) * 0.5f),
+                            start = Offset(w * 0.3f, waveY2),
+                            end = Offset(w * 0.7f, waveY2),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 10f))
+                        )
+                    }
+
+                    // On-Canvas UI labels and temperature tags
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.size(8.dp).background(Color.White, RoundedCornerShape(100.dp)))
+                        Text("Cavity (Top): ${topMoldTemp.roundToInt()}°C", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.size(8.dp).background(Color.White, RoundedCornerShape(100.dp)))
+                        Text("Core (Bottom): ${botMoldTemp.roundToInt()}°C", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 24.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = String.format(Locale.getDefault(), "Delta T: %.1f°C", tempDiff),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (tempDiff in 3f..6f) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                        )
+                    }
+                }
+            }
+
+            // Controllers Section
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Top Cavity Temp", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${topMoldTemp.roundToInt()}°C", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = topMoldTemp,
+                        onValueChange = { topMoldTemp = it },
+                        valueRange = 135f..170f,
+                        modifier = Modifier.height(26.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Bottom Core Temp", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${botMoldTemp.roundToInt()}°C", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = botMoldTemp,
+                        onValueChange = { botMoldTemp = it },
+                        valueRange = 135f..170f,
+                        modifier = Modifier.height(26.dp)
+                    )
+                }
+            }
+
+            // Quick Source Chip Selector
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Heat Source Power Profile", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Thermal Oil", "Electric Cartridge", "Steam Platen").forEach { source ->
+                        FilterChip(
+                            selected = heatingSource == source,
+                            onClick = { heatingSource = source },
+                            label = { Text(source, fontSize = 10.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // Real-Time Diagnostic Advisory Panel
+            Card(
+                colors = CardDefaults.cardColors(containerColor = feedbackStatus.color.copy(alpha = 0.08f)),
+                border = BorderStroke(1.dp, feedbackStatus.color.copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        imageVector = feedbackStatus.icon,
+                        contentDescription = "Status Icon",
+                        tint = feedbackStatus.color,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column {
+                        Text(
+                            text = feedbackStatus.title,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = feedbackStatus.desc,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Heating energy dynamic indicators
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Tooling Thermal Energy Metrics",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Transient Energy Ingest", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(String.format(Locale.getDefault(), "%.1f kJ", thermalEnergyKJ), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Heat Transfer Velocity", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(String.format(Locale.getDefault(), "%.2f kW", avgHeatPowerKW), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Text(
+                        text = "Estimated based on a typical SMC Heat Capacity of 1.25 J/gK inside a multi-zone temperature controlled mold. Heat loss at shearing edges is ignored.",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.outline,
+                        lineHeight = 12.sp
+                    )
+                }
+            }
+        }
+    }
+
+    if (isTablet) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
+                content()
+            }
+        }
+    } else {
+        content()
+    }
+}
+
+private data class ThermalStatus(
+    val title: String,
+    val desc: String,
+    val color: Color,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+@Composable
+fun CostEstimatorView(viewModel: SmcCalculationViewModel, isTablet: Boolean) {
+    var compoundCostPerKg by remember { mutableStateOf(3.50f) } // $
+    var annualVolume by remember { mutableStateOf(20000f) } // parts/year
+
+    val output = viewModel.calculationResult
+    val partWeightKg = (output?.partWeightG ?: 1200.0) / 1000.0
+    val chargeWeightKg = (output?.chargeWeightG ?: 1224.0) / 1000.0
+    val garbageFlashKg = (chargeWeightKg - partWeightKg).coerceAtLeast(0.0)
+
+    val singlePartMaterialCost = chargeWeightKg * compoundCostPerKg
+    val singlePartFlashWasteCost = garbageFlashKg * compoundCostPerKg
+    val totalAnnualMaterialInvestment = singlePartMaterialCost * annualVolume
+    val totalAnnualMoneyLostToFlash = singlePartFlashWasteCost * annualVolume
+
+    // ROI Scenario: Reducing flash loss down to 1.0% by optimal template cutting vs current flash scale
+    // Standard waste reduction scenario calculations
+    val optimizedFlashPercent = 0.01 // 1%
+    val optimizedChargeWeightKg = partWeightKg * (1.0 + optimizedFlashPercent)
+    val optimizedSinglePartCost = optimizedChargeWeightKg * compoundCostPerKg
+    val prospectiveSavingsPerPart = (singlePartMaterialCost - optimizedSinglePartCost).coerceAtLeast(0.0)
+    val annualSavingsTarget = prospectiveSavingsPerPart * annualVolume
+
+    val content = @Composable {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "Mayur - SMC Cost & Material Waste Estimator",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Analyze cumulative financial losses directly stemming from resin flashing and check prospective nesting returns.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Two-column responsive metric panel
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Unit Cost Structure (Per Molding Strobe)",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Active Part Mass", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(String.format(Locale.getDefault(), "%.3f kg", partWeightKg), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Column {
+                            Text("Charge Mass (w/ Flash)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(String.format(Locale.getDefault(), "%.3f kg", chargeWeightKg), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Squeezed Out Flash", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(String.format(Locale.getDefault(), "%.3f kg", garbageFlashKg), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF9800))
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Raw Compound Cost", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(String.format(Locale.getDefault(), "$%.2f", singlePartMaterialCost), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Trim Waste Waste Cost", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(String.format(Locale.getDefault(), "$%.2f", singlePartFlashWasteCost), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF5252))
+                        }
+                    }
+                }
+            }
+
+            // Cost Sliders controllers
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Compound Cost per KG ($)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(String.format(Locale.getDefault(), "$%.2f /kg", compoundCostPerKg), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = compoundCostPerKg,
+                        onValueChange = { compoundCostPerKg = it },
+                        valueRange = 1.50f..8.50f,
+                        modifier = Modifier.height(26.dp)
+                    )
+                }
+
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Annual Production Run Target", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(String.format(Locale.getDefault(), "%s parts/yr", annualVolume.roundToInt().toString()), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = annualVolume,
+                        onValueChange = { annualVolume = it },
+                        valueRange = 1000f..100000f,
+                        steps = 99,
+                        modifier = Modifier.height(26.dp)
+                    )
+                }
+            }
+
+            // Material utilized vs scrap representation graph
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161618)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha=0.3f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Expenditure Composition Breakdown", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+
+                            val utilizedPercent = (partWeightKg / chargeWeightKg).toFloat()
+
+                            // Render utilized color (Green/Blue theme)
+                            drawRect(
+                                color = Color(0xFF1E88E5),
+                                topLeft = Offset(0f, 0f),
+                                size = Size(w * utilizedPercent, h)
+                            )
+                            // Render wasted color (Crimson)
+                            drawRect(
+                                color = Color(0xFFFF5252),
+                                topLeft = Offset(w * utilizedPercent, 0f),
+                                size = Size(w * (1f - utilizedPercent), h)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.size(8.dp).background(Color(0xFF1E88E5), RoundedCornerShape(2.dp)))
+                            Text(String.format(Locale.getDefault(), "Finished Part Value: $%.1fK (%.1f%%)", (totalAnnualMaterialInvestment - totalAnnualMoneyLostToFlash)/1000f, (partWeightKg/chargeWeightKg)*100f), fontSize = 10.sp, color = Color.LightGray)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.size(8.dp).background(Color(0xFFFF5252), RoundedCornerShape(2.dp)))
+                            Text(String.format(Locale.getDefault(), "Wasted Flash Loss: $%.1fK (%.1f%%)", totalAnnualMoneyLostToFlash/1000f, (garbageFlashKg/chargeWeightKg)*100f), fontSize = 10.sp, color = Color.LightGray)
+                        }
+                    }
+                }
+            }
+
+            // ROI Optimization Action Card (Highly Polished Green Box)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                border = BorderStroke(1.dp, Color(0xFF81C784))
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "ROI Success Icon",
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "Precision Molding Opportunity Detected",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1B5E20)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = String.format(
+                                Locale.getDefault(),
+                                "By implementing precise nested water-jet or ultrasonic ply template cutters, you can reduce the flash trim allowance to exactly 1.0%%. For this trial, that single yield enhancement secures $%.2f in savings per stroke, yielding a stunning target savings of $%,.2f per year.",
+                                prospectiveSavingsPerPart,
+                                annualSavingsTarget
+                            ),
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = Color(0xFF2E7D32)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (isTablet) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
+                content()
+            }
+        }
+    } else {
+        content()
+    }
+}
+
+@Composable
+fun PressMatcherView(viewModel: SmcCalculationViewModel, isTablet: Boolean) {
+    var availablePressCapacityTons by remember { mutableStateOf(800f) }
+
+    val output = viewModel.calculationResult
+    val requiredForceTons = output?.clampingForceTons ?: 450.0
+
+    val ratio = (requiredForceTons / availablePressCapacityTons)
+    val ratioPercent = (ratio * 100f).roundToInt()
+
+    val matchEvaluation = remember(ratio, requiredForceTons, availablePressCapacityTons) {
+        when {
+            requiredForceTons > availablePressCapacityTons -> PressEvaluationStatus(
+                title = "CRITICAL INSUFFICIENT TONNAGE",
+                color = Color(0xFFFF5252),
+                desc = "Warning: The mold required force of ${requiredForceTons.roundToInt()} Tons exceeds available press capacity of ${availablePressCapacityTons.roundToInt()} Tons. Attempting to cycle will trigger safety emergency limits, separate the parting lines, produce excessive flashing, or cause internal resin starvation."
+            )
+            ratio >= 0.85f -> PressEvaluationStatus(
+                title = "BORDERLINE SYSTEM CAPABILITY",
+                color = Color(0xFFFF9800),
+                desc = "Operation possible but highly unsafe. Compacting is occurring at ${ratioPercent}% capacity. Press tie bars, guidance rails, and hydraulic platen cylinders will endure elevated flexural strains, causing accelerated wear on seals."
+            )
+            ratio in 0.55f..0.85f -> PressEvaluationStatus(
+                title = "OPTIMAL EFFICIENCY ZONE",
+                color = Color(0xFF4CAF50),
+                desc = "Excellent match! Running at ${ratioPercent}% press rating ensures standard hydraulic compression speeds, maintains perfect mold parallel positioning control, and prolongs machine life."
+            )
+            else -> PressEvaluationStatus(
+                title = "SUB-OPTIMAL LOW UTILIZATION",
+                color = Color(0xFF1E88E5),
+                desc = "Oversized machine choice. Press capacity is highly underutilized (only ${ratioPercent}%). Squeezing a small projection tool inside a gigantic hydraulic press boosts electric utilities waste, yields sluggish closure, and strains individual mold shear edges."
+            )
+        }
+    }
+
+    val content = @Composable {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "Mayur - Press Capacity Matcher & Efficiency Judge",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Confirm tool compatibility. Verify that required mold projection area clamping force perfectly matches hydraulic press specifications.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Dual indicators
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("MOLD FORCE DEMAND", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("${requiredForceTons.roundToInt()} T", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("TARGET PRESS ENGINE", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("${availablePressCapacityTons.roundToInt()} T", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+
+            // Slider of press options
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Select Shop Press Tonnage Limit", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${availablePressCapacityTons.roundToInt()} Metric Tons", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Slider(
+                    value = availablePressCapacityTons,
+                    onValueChange = { availablePressCapacityTons = it },
+                    valueRange = 100f..2500f,
+                    modifier = Modifier.height(26.dp)
+                )
+
+                // Quick presets buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(300f, 500f, 1000f, 1500f, 2000f).forEach { tonRating ->
+                        AssistChip(
+                            onClick = { availablePressCapacityTons = tonRating },
+                            label = { Text("${tonRating.roundToInt()}T", fontSize = 10.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // Gauge utilization graphics
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161618)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha=0.3f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Tonnage Utilization Gauge", fontSize = 11.sp, color = Color.White)
+                        Text("$ratioPercent%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = matchEvaluation.color)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+
+                            val cap = ratio.coerceIn(0.0, 1.0).toFloat()
+                            drawRect(
+                                color = matchEvaluation.color,
+                                topLeft = Offset(0f, 0f),
+                                size = Size(width = w * cap, height = h)
+                            )
+
+                            // 85% limit tick line
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.5f),
+                                start = Offset(w * 0.85f, 0f),
+                                end = Offset(w * 0.85f, h),
+                                strokeWidth = 2.5f
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("0%", fontSize = 9.sp, color = Color.Gray)
+                        Text("Optimal (55-85%)", fontSize = 9.sp, color = Color.Gray, modifier = Modifier.padding(start = 30.dp))
+                        Text("Safety Limit (85%)", fontSize = 9.sp, color = Color.Gray)
+                    }
+                }
+            }
+
+            // Evaluation status advisory card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = matchEvaluation.color.copy(alpha = 0.08f)),
+                border = BorderStroke(1.dp, matchEvaluation.color.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (ratioPercent > 100) Icons.Default.Warning else Icons.Default.CheckCircle,
+                        contentDescription = "Evaluation Status",
+                        tint = matchEvaluation.color,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column {
+                        Text(
+                            text = matchEvaluation.title,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = matchEvaluation.desc,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (isTablet) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
+                content()
+            }
+        }
+    } else {
+        content()
+    }
+}
+
+private data class PressEvaluationStatus(
+    val title: String,
+    val color: Color,
+    val desc: String
+)
+
+@Composable
+fun TroubleshooterView(isTablet: Boolean) {
+    var selectedDefectIndex by remember { mutableStateOf(0) }
+
+    val defects = listOf(
+        DefectItem(
+            name = "Surface Blisters (Bubbles)",
+            tagline = "Gas/moisture bubbles bulging on skin",
+            severity = "Moderate",
+            cause = "Incomplete degassing. Internal moisture, volatile monomer solvents in unsaturated polyester resin matrix, or premature chemical closure sealing hot gases inside core.",
+            symptoms = "Circular hollow bumps appearing on exterior skins within 20 minutes of demolding.",
+            action = "Relieve mold compression; open venting slits. Increase early close dwell time. Lower temperature of surface to retard skin curing before air venting executes.",
+            redesign = "Extend mold shear edge venting margins. Lower shelf-age of compound to enforce batch dryness. Set lower initiator concentration."
+        ),
+        DefectItem(
+            name = "Short Mold (Non-fill cavity)",
+            tagline = "Unfilled edges, thin margins, skeletal ribs",
+            severity = "Critical",
+            cause = "Resin gelation/pre-cure prevents flow completing. Flow resistance exceeds hydraulic compression, or charge weight has sub-nominal scale.",
+            symptoms = "Ragged, brittle, unfilled borders, empty structural bosses, fibers visible at fringes.",
+            action = "Increase raw SMC charge layer weight by adding a small balancing helper layer. Maximize hydraulic slide approach speed. Decrease platen heat to slow down premature curing.",
+            redesign = "Relocate local charge placement templates closer to deep pockets or corners. Add helper channels or taper high vertical walls."
+        ),
+        DefectItem(
+            name = "Weld Lines (Knit paths)",
+            tagline = "Visible seams where separate stream-lines meet",
+            severity = "Moderate",
+            cause = "Laps or knit marks. Separate fluid stream-lines converge with too low local cross-linking pressure, stalling fiber integration and forming micro-cracks.",
+            symptoms = "Linear surface lines, highly prone to direct structural snapping or physical failure during testing.",
+            action = "Reposition raw charges as a cohesive single sheet rather than multiple puzzle segments. Elevate mold cylinder pressure to foster flow convergence.",
+            redesign = "Optimize charge overlap structure. Re-design part flow path obstacles to minimize stream splitting."
+        ),
+        DefectItem(
+            name = "Fiber Segregation (Resin Rich)",
+            tagline = "Glass fibers stall, resin flows separately",
+            severity = "High",
+            cause = "Excessive flow paths. Material travels over extreme distances, forcing long glass fibers to stall against micro-structural corners or narrow mold clearances.",
+            symptoms = "Translucent structural borders lacking glass fiber reinforcements, prone to severe thermal stress cracking.",
+            action = "Increase charge coverage area (e.g., from 60% up to 75%) to cut flow travel distances. Use low-shrinkage low-profile resin matrix blends.",
+            redesign = "Smooth interior corners with generous fillets. Avoid sudden narrow-gap sections inside vertical rib segments."
+        ),
+        DefectItem(
+            name = "Part Warpage (Twisting)",
+            tagline = "Uncontrolled bending or curl on ejecting",
+            severity = "High",
+            cause = "Uneven molecular cure shrinkage rates between raw top and bottom faces, or high thermal shock differential across tooling components.",
+            symptoms = "Part twisting upon cooling. Structural dimensions fall out of standard assembly fit tolerances.",
+            action = "Check thermal zones on manifolds. Maintain top mold 3°C to 5°C hotter than bottom center. Use a cooling fixture table immediately after demolding.",
+            redesign = "Ensure uniform part wall thickness. Eliminate severe asymmetry across rib layouts or side bosses."
+        )
+    )
+
+    val content = @Composable {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "Mayur - Molding Defects Expert Troubleshooter",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Interactive physical faults manual. Tap a defect to extract real-world root causes and dynamic shop-floor corrective actions.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Defects Horizontal scroll grid selection
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                defects.forEachIndexed { index, defect ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (selectedDefectIndex == index) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        ),
+                        border = BorderStroke(
+                            width = 1.2.dp,
+                            color = if (selectedDefectIndex == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier
+                            .width(180.dp)
+                            .clickable { selectedDefectIndex = index }
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = when (defect.severity) {
+                                        "Critical" -> "CRITICAL"
+                                        "High" -> "HIGH"
+                                        else -> "MODERATE"
+                                    },
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = when (defect.severity) {
+                                        "Critical" -> Color(0xFFFF5252)
+                                        "High" -> Color(0xFFFF9800)
+                                        else -> Color(0xFF1E88E5)
+                                    },
+                                    modifier = Modifier
+                                        .background(
+                                            color = when (defect.severity) {
+                                                "Critical" -> Color(0xFFFF5252).copy(alpha = 0.08f)
+                                                "High" -> Color(0xFFFF9800).copy(alpha = 0.08f)
+                                                else -> Color(0xFF1E88E5).copy(alpha = 0.08f)
+                                            },
+                                            shape = RoundedCornerShape(2.dp)
+                                        )
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = defect.name,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+
+                            Text(
+                                text = defect.tagline,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.outline,
+                                maxLines = 2,
+                                lineHeight = 12.sp,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Expanded detail view
+            val activeDefect = defects[selectedDefectIndex]
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = activeDefect.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Text(
+                            text = "Severity: ${activeDefect.severity}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = when (activeDefect.severity) {
+                                "Critical" -> Color(0xFFFF5252)
+                                "High" -> Color(0xFFFF9800)
+                                else -> Color(0xFF4CAF50)
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                    // Physical symptoms
+                    Column {
+                        Text("Visible Symptoms", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.outline)
+                        Text(activeDefect.symptoms, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface, lineHeight = 15.sp)
+                    }
+
+                    // Physical Root cause
+                    Column {
+                        Text("Physical Root Cause", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.outline)
+                        Text(activeDefect.cause, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface, lineHeight = 15.sp)
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                    // Live shop floor corrective actions
+                    Surface(
+                        color = Color(0xFFFFECEB),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Shop Floor Operator Response (Immediate)",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFAD140F)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                activeDefect.action,
+                                fontSize = 11.sp,
+                                color = Color(0xFF5C0000),
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+
+                    // Engineering redesign modifications
+                    Surface(
+                        color = Color(0xFFE8F0FE),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Tooling & Material Redesign (Long-Term)",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1A73E8)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                activeDefect.redesign,
+                                fontSize = 11.sp,
+                                color = Color(0xFF0D3C7A),
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (isTablet) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
+                content()
+            }
+        }
+    } else {
+        content()
+    }
+}
+
+private data class DefectItem(
+    val name: String,
+    val tagline: String,
+    val severity: String,
+    val cause: String,
+    val symptoms: String,
+    val action: String,
+    val redesign: String
+)
