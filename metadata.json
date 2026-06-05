@@ -1,0 +1,6 @@
+{
+  "name": "SMC Molding Calc",
+  "description": "SMC compression molding parameters calculator including part dimension, material weight, clamping force, and cure time estimation with local trial results log.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
