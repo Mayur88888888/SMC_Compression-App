@@ -1,9 +1,9 @@
 package com.example.ui
 
-import kotlin.math.sqrt
-import kotlin.math.roundToInt
+import kotlin.math.*
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,8 +20,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -34,6 +37,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.SmcCalculation
 import java.text.SimpleDateFormat
 import java.util.*
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import coil.compose.AsyncImage
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -150,6 +157,17 @@ fun SmcCalculatorScreen(
                     },
                     modifier = Modifier.testTag("tab_history")
                 )
+                Tab(
+                    selected = activeTab == 3,
+                    onClick = { activeTab = 3 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
+                            Text("Flow Simulator", maxLines = 1)
+                        }
+                    },
+                    modifier = Modifier.testTag("tab_simulator")
+                )
             }
 
             AnimatedContent(
@@ -183,6 +201,11 @@ fun SmcCalculatorScreen(
                             },
                             onDelete = { id -> viewModel.deleteById(id) },
                             onDeleteAll = { viewModel.deleteAll() }
+                        )
+                    }
+                    3 -> {
+                        FlowSimulatorTabContent(
+                            isTablet = isTablet
                         )
                     }
                 }
@@ -1170,6 +1193,790 @@ fun HistoryTabContent(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun FlowSimulatorTabContent(isTablet: Boolean) {
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedTemplateIndex by remember { mutableStateOf(0) } // 0: Bumper, 1: Bracket, 2: Dome
+    var chargeX by remember { mutableStateOf(0.5f) } // 0f..1f
+    var chargeY by remember { mutableStateOf(0.5f) } // 0f..1f
+    var chargeScale by remember { mutableStateOf(0.42f) }
+    var chargeAspectY by remember { mutableStateOf(1.0f) }
+    var chargeRotation by remember { mutableStateOf(0f) }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedImageUri = uri
+            selectedTemplateIndex = -1 // -1 is loaded user graphic
+        }
+    }
+
+    if (isTablet) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Left Controls Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    FlowControlsSection(
+                        selectedTemplateIndex = selectedTemplateIndex,
+                        onSelectTemplate = { idx ->
+                            selectedTemplateIndex = idx
+                            selectedImageUri = null
+                        },
+                        onLauncherPickImage = { launcher.launch("image/*") },
+                        selectedImageUri = selectedImageUri,
+                        chargeScale = chargeScale,
+                        onChargeScaleChange = { chargeScale = it },
+                        chargeAspectY = chargeAspectY,
+                        onChargeAspectYChange = { chargeAspectY = it },
+                        chargeRotation = chargeRotation,
+                        onChargeRotationChange = { chargeRotation = it },
+                        chargeX = chargeX,
+                        chargeY = chargeY,
+                        onResetOffset = {
+                            chargeX = 0.5f
+                            chargeY = 0.5f
+                        }
+                    )
+                }
+            }
+
+            // Right Visualizer Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF141416)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha=0.5f)),
+                modifier = Modifier
+                    .weight(1.3f)
+                    .fillMaxHeight()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    FlowVisualizerCanvas(
+                        selectedTemplateIndex = selectedTemplateIndex,
+                        imageUri = selectedImageUri,
+                        chargeX = chargeX,
+                        chargeY = chargeY,
+                        chargeScale = chargeScale,
+                        chargeAspectY = chargeAspectY,
+                        chargeRotation = chargeRotation,
+                        onPositionChange = { nx, ny ->
+                            chargeX = nx
+                            chargeY = ny
+                        }
+                    )
+                }
+            }
+        }
+    } else {
+        // Compact Column Layout
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF141416)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha=0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(340.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    FlowVisualizerCanvas(
+                        selectedTemplateIndex = selectedTemplateIndex,
+                        imageUri = selectedImageUri,
+                        chargeX = chargeX,
+                        chargeY = chargeY,
+                        chargeScale = chargeScale,
+                        chargeAspectY = chargeAspectY,
+                        chargeRotation = chargeRotation,
+                        onPositionChange = { nx, ny ->
+                            chargeX = nx
+                            chargeY = ny
+                        }
+                    )
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    FlowControlsSection(
+                        selectedTemplateIndex = selectedTemplateIndex,
+                        onSelectTemplate = { idx ->
+                            selectedTemplateIndex = idx
+                            selectedImageUri = null
+                        },
+                        onLauncherPickImage = { launcher.launch("image/*") },
+                        selectedImageUri = selectedImageUri,
+                        chargeScale = chargeScale,
+                        onChargeScaleChange = { chargeScale = it },
+                        chargeAspectY = chargeAspectY,
+                        onChargeAspectYChange = { chargeAspectY = it },
+                        chargeRotation = chargeRotation,
+                        onChargeRotationChange = { chargeRotation = it },
+                        chargeX = chargeX,
+                        chargeY = chargeY,
+                        onResetOffset = {
+                            chargeX = 0.5f
+                            chargeY = 0.5f
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FlowControlsSection(
+    selectedTemplateIndex: Int,
+    onSelectTemplate: (Int) -> Unit,
+    onLauncherPickImage: () -> Unit,
+    selectedImageUri: Uri?,
+    chargeScale: Float,
+    onChargeScaleChange: (Float) -> Unit,
+    chargeAspectY: Float,
+    onChargeAspectYChange: (Float) -> Unit,
+    chargeRotation: Float,
+    onChargeRotationChange: (Float) -> Unit,
+    chargeX: Float,
+    chargeY: Float,
+    onResetOffset: () -> Unit
+) {
+    Text(
+        text = "SMC Charge Flow & Weld-Line Simulator",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold
+    )
+
+    Text(
+        text = "Touch and reposition the raw material SMC charge sheet anywhere inside the cavity below to simulate fluid flows and predict weld lines.",
+        fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+    // Source selection text
+    Text(
+        text = "Molding Cavity Shape Source",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = selectedTemplateIndex == 0,
+                onClick = { onSelectTemplate(0) },
+                label = { Text("Car Bumper", fontSize = 11.sp) },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = selectedTemplateIndex == 1,
+                onClick = { onSelectTemplate(1) },
+                label = { Text("Rib Bracket", fontSize = 11.sp) },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = selectedTemplateIndex == 2,
+                onClick = { onSelectTemplate(2) },
+                label = { Text("Aero Dome", fontSize = 11.sp) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+        
+        Button(
+            onClick = onLauncherPickImage,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (selectedTemplateIndex == -1) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = if (selectedTemplateIndex == -1) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSecondaryContainer
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Upload", modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (selectedImageUri != null) "Change Real Part Photo" else "Upload Real Part Photo",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+    Text(
+        text = "SMC Charge Dimensions & Plan",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold
+    )
+
+    // Size Slider
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Charge Coverage Size", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${(chargeScale * 100).roundToInt()}%", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+        Slider(
+            value = chargeScale,
+            onValueChange = onChargeScaleChange,
+            valueRange = 0.15f..0.85f,
+            modifier = Modifier.height(24.dp)
+        )
+    }
+
+    // Aspect Ratio Slider
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Charge Aspect Ratio (Oblong)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(String.format(Locale.getDefault(), "%.2f", chargeAspectY), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+        Slider(
+            value = chargeAspectY,
+            onValueChange = onChargeAspectYChange,
+            valueRange = 0.5f..2.0f,
+            modifier = Modifier.height(24.dp)
+        )
+    }
+
+    // Angle Slider
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Ply Fiber Orientation Angle", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${chargeRotation.roundToInt()}°", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+        Slider(
+            value = chargeRotation,
+            onValueChange = onChargeRotationChange,
+            valueRange = 0f..180f,
+            modifier = Modifier.height(24.dp)
+        )
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = String.format(Locale.getDefault(), "Charge Center: X:%.0f%% | Y:%.0f%%", chargeX * 100f, chargeY * 100f),
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.outline
+        )
+        TextButton(
+            onClick = onResetOffset,
+            modifier = Modifier.height(28.dp)
+        ) {
+            Text("Center Charge", fontSize = 11.sp)
+        }
+    }
+
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+    Text(
+        text = "Molding Flow Evaluation Metrics",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+
+    val maxFlowLenPercent = sqrt(
+        max(chargeX, 1f - chargeX).toDouble().pow(2.0) +
+        max(chargeY, 1f - chargeY).toDouble().pow(2.0)
+    ).toFloat()
+
+    val nominalFlowDistanceMm = (maxFlowLenPercent * 380f).roundToInt()
+    val isFarOffCenter = chargeX < 0.32f || chargeX > 0.68f || chargeY < 0.32f || chargeY > 0.68f
+    val isExtremelyLongFlow = nominalFlowDistanceMm > 220
+    val hasCoreInterference = selectedTemplateIndex == 1 && (
+        sqrt((chargeX - 0.3f).pow(2f) + (chargeY - 0.35f).pow(2f)) < 0.15f ||
+        sqrt((chargeX - 0.7f).pow(2f) + (chargeY - 0.35f).pow(2f)) < 0.15f ||
+        sqrt((chargeX - 0.3f).pow(2f) + (chargeY - 0.65f).pow(2f)) < 0.15f ||
+        sqrt((chargeX - 0.7f).pow(2f) + (chargeY - 0.65f).pow(2f)) < 0.15f
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f), RoundedCornerShape(4.dp))
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Peak Flow Path Length", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text("$nominalFlowDistanceMm mm", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isExtremelyLongFlow) Color(0xFFFF9800) else Color(0xFF4CAF50))
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f), RoundedCornerShape(4.dp))
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Hydraulic Balance Offset", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+            val offsetVal = (sqrt((chargeX - 0.5f).pow(2f) + (chargeY - 0.5f).pow(2f)) * 100f).roundToInt()
+            Text("$offsetVal%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (offsetVal > 25) Color(0xFFFF5252) else Color(0xFF4CAF50))
+        }
+
+        Surface(
+            color = when {
+                hasCoreInterference -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                isExtremelyLongFlow && isFarOffCenter -> Color(0xFFFFF3E0)
+                isFarOffCenter -> Color(0xFFE8F5E9)
+                else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            },
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = when {
+                        hasCoreInterference -> Icons.Default.Warning
+                        isExtremelyLongFlow -> Icons.Default.Warning
+                        else -> Icons.Default.CheckCircle
+                    },
+                    contentDescription = "Status Icon",
+                    tint = when {
+                        hasCoreInterference -> MaterialTheme.colorScheme.error
+                        isExtremelyLongFlow -> Color(0xFFFF9800)
+                        else -> Color(0xFF4CAF50)
+                    },
+                    modifier = Modifier.size(18.dp)
+                )
+
+                Column {
+                    Text(
+                        text = when {
+                            hasCoreInterference -> "Core/Boss Interference Alert!"
+                            isExtremelyLongFlow && isFarOffCenter -> "High Flow Path Distance Warning"
+                            isFarOffCenter -> "Asymmetrical Flow Pattern"
+                            else -> "Balanced SMC Flow Layout"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = when {
+                            hasCoreInterference -> "The current SMC charge is overlapping too closely with structural tool inserts. Fiber degradation, rich resin concentration, or core shifting might occur."
+                            isExtremelyLongFlow && isFarOffCenter -> "Peak flow path ($nominalFlowDistanceMm mm) exceeds standard 200mm recommendation. Material faces high flow resistance; raise mold temperatures to prevent pre-curing."
+                            isFarOffCenter -> "Sub-optimal charge position causes lopsided mold fill. This might create unbalanced hydraulic moments on the press slider. Press level monitoring is recommended."
+                            else -> "Optimal charge alignment center. Material flows evenly to the outer mold edges, achieving uniform pressure profile and minimizing knit-lines."
+                        },
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FlowVisualizerCanvas(
+    selectedTemplateIndex: Int,
+    imageUri: Uri?,
+    chargeX: Float,
+    chargeY: Float,
+    chargeScale: Float,
+    chargeAspectY: Float,
+    chargeRotation: Float,
+    onPositionChange: (Float, Float) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF141416))
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    onPositionChange(
+                        (offset.x / size.width).coerceIn(0f, 1f),
+                        (offset.y / size.height).coerceIn(0f, 1f)
+                    )
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        if (imageUri != null) {
+            AsyncImage(
+                model = imageUri,
+                contentDescription = "Uploaded Real Part Frame",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+        }
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width
+            val cy = size.height
+
+            if (cx <= 0 || cy <= 0) return@Canvas
+
+            // Draw clean background technician grid
+            val gridStep = 40f
+            for (col in 0..(cx / gridStep).toInt()) {
+                drawLine(
+                    color = Color.White.copy(alpha = 0.04f),
+                    start = Offset(col * gridStep, 0f),
+                    end = Offset(col * gridStep, cy),
+                    strokeWidth = 1f
+                )
+            }
+            for (row in 0..(cy / gridStep).toInt()) {
+                drawLine(
+                    color = Color.White.copy(alpha = 0.04f),
+                    start = Offset(0f, row * gridStep),
+                    end = Offset(cx, row * gridStep),
+                    strokeWidth = 1f
+                )
+            }
+
+            // Draw template outlines if no image uploaded
+            if (imageUri == null) {
+                when (selectedTemplateIndex) {
+                    0 -> {
+                        // Automotive Lip Bumper
+                        val path = Path()
+                        path.moveTo(cx * 0.08f, cy * 0.35f)
+                        path.quadraticBezierTo(cx * 0.5f, cy * 0.12f, cx * 0.92f, cy * 0.35f)
+                        path.lineTo(cx * 0.92f, cy * 0.72f)
+                        path.quadraticBezierTo(cx * 0.5f, cy * 0.52f, cx * 0.08f, cy * 0.72f)
+                        path.close()
+                        drawPath(
+                            path = path,
+                            color = Color(0xFF00FFCC).copy(alpha = 0.08f),
+                            style = androidx.compose.ui.graphics.drawscope.Fill
+                        )
+                        drawPath(
+                            path = path,
+                            color = Color(0xFF00FFCC),
+                            style = Stroke(width = 3f)
+                        )
+                    }
+                    1 -> {
+                        // Ribbed bracket rectangle
+                        val rx = cx * 0.12f
+                        val ry = cy * 0.15f
+                        val rw = cx * 0.76f
+                        val rh = cy * 0.7f
+                        drawRoundRect(
+                            color = Color(0xFF00E5FF).copy(alpha = 0.08f),
+                            topLeft = Offset(rx, ry),
+                            size = Size(rw, rh),
+                            cornerRadius = CornerRadius(16f, 16f)
+                        )
+                        drawRoundRect(
+                            color = Color(0xFF00E5FF),
+                            topLeft = Offset(rx, ry),
+                            size = Size(rw, rh),
+                            cornerRadius = CornerRadius(16f, 16f),
+                            style = Stroke(width = 3f)
+                        )
+                        // Inner core boss columns (obstacles)
+                        val centers = listOf(
+                            Offset(cx * 0.3f, cy * 0.35f),
+                            Offset(cx * 0.7f, cy * 0.35f),
+                            Offset(cx * 0.3f, cy * 0.65f),
+                            Offset(cx * 0.7f, cy * 0.65f)
+                        )
+                        centers.forEach { center ->
+                            drawCircle(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                center = center,
+                                radius = 22f
+                            )
+                            drawCircle(
+                                color = Color(0xFF00E5FF).copy(alpha = 0.5f),
+                                center = center,
+                                radius = 22f,
+                                style = Stroke(width = 2f)
+                            )
+                        }
+                    }
+                    2 -> {
+                        // Concentric Aerospace Dome circular segment
+                        val center = Offset(cx / 2f, cy / 2f)
+                        val maxRadius = cx.coerceAtMost(cy) * 0.42f
+                        drawCircle(
+                            color = Color(0xFFFFD54F).copy(alpha = 0.07f),
+                            center = center,
+                            radius = maxRadius
+                        )
+                        drawCircle(
+                            color = Color(0xFFFFD54F),
+                            center = center,
+                            radius = maxRadius,
+                            style = Stroke(width = 3f)
+                        )
+                        drawCircle(
+                            color = Color(0xFFFFD54F).copy(alpha = 0.4f),
+                            center = center,
+                            radius = maxRadius * 0.35f,
+                            style = Stroke(width = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+                        )
+                    }
+                }
+            } else {
+                // If real image, draw a simple neat high-tech workspace border
+                drawRoundRect(
+                    color = Color(0xFF8E8E93).copy(alpha = 0.6f),
+                    topLeft = Offset(4f, 4f),
+                    size = Size(cx - 8f, cy - 8f),
+                    cornerRadius = CornerRadius(8f, 8f),
+                    style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f)))
+                )
+            }
+
+            // Target positioning coordinate vectors
+            val px = cx * chargeX
+            val py = cy * chargeY
+
+            // Draw faint alignment crosshairs to center of touch
+            drawLine(
+                color = Color.White.copy(alpha = 0.15f),
+                start = Offset(px, 0f),
+                end = Offset(px, cy),
+                strokeWidth = 1f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f,5f))
+            )
+            drawLine(
+                color = Color.White.copy(alpha = 0.15f),
+                start = Offset(0f, py),
+                end = Offset(cx, py),
+                strokeWidth = 1f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f,5f))
+            )
+
+            // Flow arrows radiating outwards from the core
+            val baseScale = cx * 0.13f * chargeScale
+            val baseW = cx * 0.35f * chargeScale
+            val baseH = cx * 0.35f * chargeScale * chargeAspectY
+
+            for (angleDeg in 0 until 360 step 30) {
+                val angleRad = Math.toRadians(angleDeg.toDouble())
+                val cosA = cos(angleRad).toFloat()
+                val sinA = sin(angleRad).toFloat()
+
+                // Start point: right on the charge boundary
+                val startDist = baseScale * max(abs(cosA), abs(sinA))
+                val sx = px + cosA * startDist
+                val sy = py + sinA * startDist
+
+                // Destination point based on boundaries
+                var ex = px + cosA * (baseScale * 2.8f)
+                var ey = py + sinA * (baseScale * 2.8f)
+
+                // Constrain targets within mold boundaries physically
+                if (imageUri == null) {
+                    when (selectedTemplateIndex) {
+                        0 -> { // Bumper shape clamping
+                            val boundHyp = min(cx * 0.44f, cy/2f)
+                            val tDist = px - (cx / 2f)
+                            if (abs(tDist) > cx * 0.4f) {
+                                ex = ex.coerceIn(cx * 0.08f, cx * 0.92f)
+                                ey = ey.coerceIn(cy * 0.35f, cy * 0.72f)
+                            }
+                        }
+                        1 -> { // Rect Bracket bounds
+                            val rx = cx * 0.12f
+                            val ry = cy * 0.15f
+                            val rw = cx * 0.76f
+                            val rh = cy * 0.7f
+                            ex = ex.coerceIn(rx, rx + rw)
+                            ey = ey.coerceIn(ry, ry + rh)
+                        }
+                        2 -> { // Concentric Dome circular bounding
+                            val center = Offset(cx / 2f, cy / 2f)
+                            val maxRadius = cx.coerceAtMost(cy) * 0.42f
+                            val dx = ex - center.x
+                            val dy = ey - center.y
+                            val dist = sqrt(dx*dx + dy*dy)
+                            if (dist > maxRadius) {
+                                ex = center.x + (dx / dist) * maxRadius
+                                ey = center.y + (dy / dist) * maxRadius
+                            }
+                        }
+                    }
+                } else {
+                    // Frame boundaries for Custom Photo
+                    ex = ex.coerceIn(cx * 0.05f, cx * 0.95f)
+                    ey = ey.coerceIn(cy * 0.05f, cy * 0.95f)
+                }
+
+                // If distance is non-zero, draw the vector
+                val vecLen = sqrt((ex-sx).pow(2) + (ey-sy).pow(2))
+                if (vecLen > 8f) {
+                    // Draw flow trail line
+                    drawLine(
+                        color = Color(0xFF00FF66).copy(alpha = 0.55f),
+                        start = Offset(sx, sy),
+                        end = Offset(ex, ey),
+                        strokeWidth = 3.5f
+                    )
+
+                    // Draw moving flow pulse dots
+                    val dotPercent = (System.currentTimeMillis() % 1200) / 1200f
+                    val dotX = sx + (ex - sx) * dotPercent
+                    val dotY = sy + (ey - sy) * dotPercent
+                    drawCircle(
+                        color = Color(0xFF99FFB1),
+                        center = Offset(dotX, dotY),
+                        radius = 4.5f
+                    )
+
+                    // Draw flow arrowhead at end point
+                    val arrowAngle = atan2((ey - sy).toDouble(), (ex - sx).toDouble()).toFloat()
+                    val arrowLen = 13f
+                    val aw1 = ex - arrowLen * cos(arrowAngle - Math.PI / 6).toFloat()
+                    val ah1 = ey - arrowLen * sin(arrowAngle - Math.PI / 6).toFloat()
+                    val aw2 = ex - arrowLen * cos(arrowAngle + Math.PI / 6).toFloat()
+                    val ah2 = ey - arrowLen * sin(arrowAngle + Math.PI / 6).toFloat()
+
+                    drawLine(color = Color(0xFF00FF66), start = Offset(ex, ey), end = Offset(aw1, ah1), strokeWidth = 3f)
+                    drawLine(color = Color(0xFF00FF66), start = Offset(ex, ey), end = Offset(aw2, ah2), strokeWidth = 3f)
+                }
+            }
+
+            // Draw Raw SMC Sheet Charge presentation with rotational angle transform
+            withTransform({
+                rotate(degrees = chargeRotation, pivot = Offset(px, py))
+            }) {
+                val tx = px - baseW / 2
+                val ty = py - baseH / 2
+
+                drawRoundRect(
+                    color = Color(0xFFFF9800).copy(alpha = 0.42f),
+                    topLeft = Offset(tx, ty),
+                    size = Size(baseW, baseH),
+                    cornerRadius = CornerRadius(6f, 6f)
+                )
+
+                drawRoundRect(
+                    color = Color(0xFFFFB74D),
+                    topLeft = Offset(tx, ty),
+                    size = Size(baseW, baseH),
+                    cornerRadius = CornerRadius(6f, 6f),
+                    style = Stroke(
+                        width = 4f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                    )
+                )
+
+                drawLine(
+                    color = Color.White.copy(alpha = 0.6f),
+                    start = Offset(px - baseW * 0.35f, py),
+                    end = Offset(px + baseW * 0.35f, py),
+                    strokeWidth = 2.5f
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.6f),
+                    start = Offset(px + baseW * 0.35f, py),
+                    end = Offset(px + baseW * 0.22f, py - 6f),
+                    strokeWidth = 2.5f
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.6f),
+                    start = Offset(px + baseW * 0.35f, py),
+                    end = Offset(px + baseW * 0.22f, py + 6f),
+                    strokeWidth = 2.5f
+                )
+            }
+
+            drawCircle(
+                color = Color.White,
+                center = Offset(px, py),
+                radius = 7f
+            )
+            drawCircle(
+                color = Color(0xFFFF9800),
+                center = Offset(px, py),
+                radius = 12f,
+                style = Stroke(width = 2.5f)
+            )
+        }
+
+        Surface(
+            color = Color.Black.copy(alpha = 0.75f),
+            shape = RoundedCornerShape(4.dp),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 12.dp)
+        ) {
+            Text(
+                text = "Touch/Tap anywhere to reposition the raw charge",
+                fontSize = 10.sp,
+                color = Color.LightGray,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
         }
     }
 }
